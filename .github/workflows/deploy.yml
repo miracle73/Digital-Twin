@@ -1,0 +1,92 @@
+name: Build and Deploy to AWS App Runner
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: apprunner-deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  ECR_REPOSITORY: digital-twin
+
+jobs:
+  deploy:
+    name: Build image, push to ECR, trigger App Runner
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Log in to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          platforms: linux/amd64
+          provenance: false
+          tags: |
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Trigger App Runner deployment
+        env:
+          SERVICE_ARN: ${{ secrets.APP_RUNNER_SERVICE_ARN }}
+        run: |
+          if [ -z "$SERVICE_ARN" ]; then
+            echo "APP_RUNNER_SERVICE_ARN secret is not set. Skipping deployment trigger."
+            echo "Run 'terraform apply' first, then add the apprunner_service_arn output as the APP_RUNNER_SERVICE_ARN GitHub secret."
+            exit 1
+          fi
+          OPERATION_ID=$(aws apprunner start-deployment \
+            --service-arn "$SERVICE_ARN" \
+            --query 'OperationId' \
+            --output text)
+          echo "Deployment started. OperationId=$OPERATION_ID"
+
+      - name: Wait for App Runner deployment to finish
+        env:
+          SERVICE_ARN: ${{ secrets.APP_RUNNER_SERVICE_ARN }}
+        run: |
+          for i in $(seq 1 60); do
+            STATUS=$(aws apprunner describe-service \
+              --service-arn "$SERVICE_ARN" \
+              --query 'Service.Status' \
+              --output text)
+            echo "[$i] App Runner status: $STATUS"
+            case "$STATUS" in
+              RUNNING)
+                echo "Deployment succeeded."
+                exit 0
+                ;;
+              CREATE_FAILED|DELETE_FAILED|PAUSED)
+                echo "Deployment failed with status: $STATUS"
+                exit 1
+                ;;
+            esac
+            sleep 20
+          done
+          echo "Timed out waiting for App Runner to reach RUNNING state."
+          exit 1

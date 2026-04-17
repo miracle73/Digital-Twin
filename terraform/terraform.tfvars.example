@@ -1,0 +1,17 @@
+# Copy to terraform.tfvars and fill in real values (terraform.tfvars is gitignored).
+#
+# Required:
+openrouter_api_key = "sk-or-v1-replace-with-real-key"
+
+# Optional — defaults are sensible for production:
+# aws_region                  = "us-east-1"
+# project_name                = "digital-twin"
+# environment                 = "prod"
+# image_tag                   = "latest"
+# cpu                         = "1024"
+# memory                      = "2048"
+# autoscaling_min_size        = 1
+# autoscaling_max_size        = 3
+# autoscaling_max_concurrency = 100
+# log_retention_days          = 14
+# container_port              = "7860"
