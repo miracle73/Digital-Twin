@@ -5,7 +5,7 @@ description = "AI-powered digital twin chatbot with tool calling, deployed to AW
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-    "gradio>=6.9.0",
+    "gradio>=4.44.0,<5.0",
     "openai>=2.29.0",
     "python-dotenv>=1.2.2",
 ]

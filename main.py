@@ -286,7 +286,7 @@ with gr.Blocks(title="Miracle Nwadiaro — Digital Twin") as demo:
         """
     )
 
-    chatbot = gr.Chatbot(height=450, label="Chat with Miracle's Digital Twin")
+    chatbot = gr.Chatbot(height=450, label="Chat with Miracle's Digital Twin", type="messages")
     msg = gr.Textbox(placeholder="Ask me anything... e.g. 'What are you working on?'", label="Your message")
 
     with gr.Row():
@@ -305,8 +305,14 @@ with gr.Blocks(title="Miracle Nwadiaro — Digital Twin") as demo:
     )
 
     def respond(message, chat_history):
-        reply = chat(message, chat_history)
-        chat_history.append((message, reply))
+        history_tuples = []
+        for i in range(0, len(chat_history) - 1, 2):
+            if chat_history[i]["role"] == "user" and chat_history[i + 1]["role"] == "assistant":
+                history_tuples.append((chat_history[i]["content"], chat_history[i + 1]["content"]))
+
+        reply = chat(message, history_tuples)
+        chat_history.append({"role": "user", "content": message})
+        chat_history.append({"role": "assistant", "content": reply})
         return "", chat_history
 
     btn.click(respond, [msg, chatbot], [msg, chatbot])
