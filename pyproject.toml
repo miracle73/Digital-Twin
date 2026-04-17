@@ -3,10 +3,11 @@ name = "digital-twin"
 version = "0.1.0"
 description = "AI-powered digital twin chatbot with tool calling, deployed to AWS App Runner"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.11,<3.14"
 dependencies = [
-    "gradio==5.9.1",
-    "openai>=2.29.0",
-    "python-dotenv>=1.2.2",
+    "gradio>=5.49.0",
+    "gradio-client>=1.14.0",
+    "openai>=1.50.0,<2.0",
+    "python-dotenv>=1.0.0",
     "requests>=2.31.0",
 ]

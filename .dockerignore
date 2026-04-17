@@ -34,9 +34,7 @@ terraform/
 .terraform/
 .terraform.lock.hcl
 
-README.md
-*.md
-!pyproject.toml
+
 Dockerfile
 .dockerignore
 

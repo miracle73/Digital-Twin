@@ -286,7 +286,7 @@ with gr.Blocks(title="Miracle Nwadiaro — Digital Twin") as demo:
         """
     )
 
-    chatbot = gr.Chatbot(height=450, label="Chat with Miracle's Digital Twin", type="messages")
+    chatbot = gr.Chatbot(height=450, label="Chat with Miracle's Digital Twin")
     msg = gr.Textbox(placeholder="Ask me anything... e.g. 'What are you working on?'", label="Your message")
 
     with gr.Row():
@@ -322,6 +322,8 @@ with gr.Blocks(title="Miracle Nwadiaro — Digital Twin") as demo:
 if __name__ == "__main__":
     demo.launch(
         server_name="0.0.0.0",
-        server_port=7860,
+        server_port=int(os.environ.get("PORT", 7860)),
+        share=False,           
+        inbrowser=False,       
         theme=gr.themes.Soft(),
     )
