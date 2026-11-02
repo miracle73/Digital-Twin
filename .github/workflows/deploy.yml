@@ -1,20 +1,25 @@
-name: Build and Deploy to AWS App Runner
+name: Deploy backend to AWS Lambda
 
 on:
   push:
     branches: [main]
+    paths: ["backend/**", ".github/workflows/deploy.yml"]
   workflow_dispatch:
 
 concurrency:
-  group: apprunner-deploy-${{ github.ref }}
+  group: lambda-deploy-${{ github.ref }}
   cancel-in-progress: false
 
 env:
-  ECR_REPOSITORY: digital-twin
+  FUNCTION_NAME: digital-twin
+  ROLE_NAME: digital-twin-lambda
+  MODEL: openai/gpt-4o-mini
+  # Set to your Vercel URL (e.g. https://digital-twin.vercel.app) once deployed.
+  ALLOWED_ORIGIN: "*"
 
 jobs:
   deploy:
-    name: Build image, push to ECR, trigger App Runner
+    name: Package and deploy Lambda + Function URL
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -30,63 +35,71 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
 
-      - name: Log in to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
+      - name: Package backend
+        run: cd backend && zip -qr ../backend.zip . -x "__pycache__/*"
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: ./Dockerfile
-          push: true
-          platforms: linux/amd64
-          provenance: false
-          tags: |
-            ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
-            ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Trigger App Runner deployment
-        env:
-          SERVICE_ARN: ${{ secrets.APP_RUNNER_SERVICE_ARN }}
+      - name: Ensure IAM role
         run: |
-          if [ -z "$SERVICE_ARN" ]; then
-            echo "APP_RUNNER_SERVICE_ARN secret is not set. Skipping deployment trigger."
-            echo "Run 'terraform apply' first, then add the apprunner_service_arn output as the APP_RUNNER_SERVICE_ARN GitHub secret."
-            exit 1
+          if ! aws iam get-role --role-name "$ROLE_NAME" >/dev/null 2>&1; then
+            aws iam create-role --role-name "$ROLE_NAME" --assume-role-policy-document '{
+              "Version": "2012-10-17",
+              "Statement": [{"Effect": "Allow", "Principal": {"Service": "lambda.amazonaws.com"}, "Action": "sts:AssumeRole"}]
+            }' >/dev/null
+            aws iam attach-role-policy --role-name "$ROLE_NAME" \
+              --policy-arn arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
           fi
-          OPERATION_ID=$(aws apprunner start-deployment \
-            --service-arn "$SERVICE_ARN" \
-            --query 'OperationId' \
-            --output text)
-          echo "Deployment started. OperationId=$OPERATION_ID"
+          echo "ROLE_ARN=$(aws iam get-role --role-name "$ROLE_NAME" --query Role.Arn --output text)" >> "$GITHUB_ENV"
 
-      - name: Wait for App Runner deployment to finish
+      - name: Create or update function
         env:
-          SERVICE_ARN: ${{ secrets.APP_RUNNER_SERVICE_ARN }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         run: |
-          for i in $(seq 1 60); do
-            STATUS=$(aws apprunner describe-service \
-              --service-arn "$SERVICE_ARN" \
-              --query 'Service.Status' \
-              --output text)
-            echo "[$i] App Runner status: $STATUS"
-            case "$STATUS" in
-              RUNNING)
-                echo "Deployment succeeded."
-                exit 0
-                ;;
-              CREATE_FAILED|DELETE_FAILED|PAUSED)
-                echo "Deployment failed with status: $STATUS"
-                exit 1
-                ;;
-            esac
-            sleep 20
-          done
-          echo "Timed out waiting for App Runner to reach RUNNING state."
-          exit 1
+          ENV_VARS="Variables={OPENROUTER_API_KEY=$OPENROUTER_API_KEY,MODEL=$MODEL}"
+          if aws lambda get-function --function-name "$FUNCTION_NAME" >/dev/null 2>&1; then
+            aws lambda update-function-code --function-name "$FUNCTION_NAME" \
+              --zip-file fileb://backend.zip >/dev/null
+            aws lambda wait function-updated-v2 --function-name "$FUNCTION_NAME"
+            aws lambda update-function-configuration --function-name "$FUNCTION_NAME" \
+              --environment "$ENV_VARS" >/dev/null
+          else
+            aws logs create-log-group --log-group-name "/aws/lambda/$FUNCTION_NAME" 2>/dev/null || true
+            aws logs put-retention-policy --log-group-name "/aws/lambda/$FUNCTION_NAME" --retention-in-days 7
+            # A new IAM role can take a few seconds to become usable by Lambda.
+            for i in 1 2 3 4 5 6; do
+              aws lambda create-function --function-name "$FUNCTION_NAME" \
+                --runtime python3.12 --architectures arm64 \
+                --handler handler.lambda_handler --role "$ROLE_ARN" \
+                --zip-file fileb://backend.zip --memory-size 256 --timeout 60 \
+                --environment "$ENV_VARS" >/dev/null && break
+              [ "$i" = 6 ] && exit 1
+              echo "Role not ready yet, retrying..."; sleep 10
+            done
+          fi
+          aws lambda wait function-updated-v2 --function-name "$FUNCTION_NAME"
+
+      - name: Ensure public Function URL
+        run: |
+          CORS="AllowOrigins=$ALLOWED_ORIGIN,AllowMethods=POST,AllowHeaders=content-type,MaxAge=86400"
+          if aws lambda get-function-url-config --function-name "$FUNCTION_NAME" >/dev/null 2>&1; then
+            aws lambda update-function-url-config --function-name "$FUNCTION_NAME" --cors "$CORS" >/dev/null
+          else
+            aws lambda create-function-url-config --function-name "$FUNCTION_NAME" \
+              --auth-type NONE --cors "$CORS" >/dev/null
+          fi
+          # Public Function URLs need both permissions (AWS requirement since Oct 2025).
+          # They already exist on redeploys, so conflicts are ignored.
+          aws lambda add-permission --function-name "$FUNCTION_NAME" \
+            --statement-id FunctionURLAllowPublicAccess --action lambda:InvokeFunctionUrl \
+            --principal "*" --function-url-auth-type NONE >/dev/null 2>&1 || true
+          aws lambda add-permission --function-name "$FUNCTION_NAME" \
+            --statement-id FunctionURLAllowInvokeAction --action lambda:InvokeFunction \
+            --principal "*" --invoked-via-function-url >/dev/null 2>&1 || true
+          URL=$(aws lambda get-function-url-config --function-name "$FUNCTION_NAME" --query FunctionUrl --output text)
+          echo "API_URL=$URL" >> "$GITHUB_ENV"
+          echo "API URL (set as VITE_API_URL in Vercel): $URL" | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Smoke test
+        run: |
+          sleep 5
+          curl -sfS -X POST "$API_URL" -H "Content-Type: application/json" \
+            -d '{"message":"How can I contact you?","history":[]}' | head -c 500

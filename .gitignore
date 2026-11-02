@@ -15,15 +15,6 @@ __pycache__/
 .coverage
 htmlcov/
 
-# Terraform
-terraform/.terraform/
-terraform/.terraform.lock.hcl
-terraform/*.tfstate
-terraform/*.tfstate.*
-terraform/*.tfvars
-!terraform/terraform.tfvars.example
-terraform/crash.log
-terraform/crash.*.log
 
 # IDE
 .vscode/
@@ -36,3 +27,6 @@ Thumbs.db
 # Gradio
 gradio_cached_examples/
 flagged/
+
+node_modules/
+frontend/dist/

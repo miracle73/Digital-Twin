@@ -1,0 +1,25 @@
+:root {
+  --bg: #f7f7fb; --card: #fff; --text: #1d1d2b; --muted: #6b6b80;
+  --accent: #4f46e5; --user: #4f46e5; --bot: #eef0f7; --border: #e2e2ec;
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #111118; --card: #1a1a24; --text: #ececf3; --muted: #9a9ab0; --bot: #262633; --border: #2e2e3d; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); }
+.app { max-width: 760px; margin: 0 auto; padding: 24px 16px; display: flex; flex-direction: column; height: 100dvh; }
+header h1 { margin: 0 0 4px; font-size: 1.6rem; }
+header p { margin: 0 0 16px; color: var(--muted); line-height: 1.5; }
+.chat { flex: 1; overflow-y: auto; background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+.msg { max-width: 85%; padding: 10px 14px; border-radius: 14px; line-height: 1.5; white-space: pre-wrap; }
+.msg.user { align-self: flex-end; background: var(--user); color: #fff; }
+.msg.assistant { align-self: flex-start; background: var(--bot); }
+.typing { color: var(--muted); font-style: italic; }
+.examples { display: flex; flex-wrap: wrap; gap: 8px; margin: auto 0; justify-content: center; }
+.examples button { background: var(--bot); color: var(--text); border: 1px solid var(--border); }
+form { display: flex; gap: 8px; margin-top: 12px; }
+input { flex: 1; min-width: 0; padding: 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--card); color: var(--text); font-size: 1rem; }
+button { padding: 10px 16px; border-radius: 10px; border: none; background: var(--accent); color: #fff; font-size: .95rem; cursor: pointer; }
+button:disabled { opacity: .5; cursor: default; }
+button.secondary { background: transparent; color: var(--muted); border: 1px solid var(--border); }
