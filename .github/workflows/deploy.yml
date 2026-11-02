@@ -101,5 +101,12 @@ jobs:
       - name: Smoke test
         run: |
           sleep 5
-          curl -sfS -X POST "$API_URL" -H "Content-Type: application/json" \
-            -d '{"message":"How can I contact you?","history":[]}' | head -c 500
+          CODE=$(curl -sS -o reply.json -w "%{http_code}" -X POST "$API_URL" \
+            -H "Content-Type: application/json" \
+            -d '{"message":"How can I contact you?","history":[]}')
+          head -c 500 reply.json; echo
+          if [ "$CODE" != 200 ]; then
+            echo "Smoke test failed with HTTP $CODE. Recent Lambda logs:"
+            aws logs tail "/aws/lambda/$FUNCTION_NAME" --since 5m | tail -20
+            exit 1
+          fi
