@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import Markdown from "react-markdown";
 
 const API_URL = import.meta.env.VITE_API_URL;
 
@@ -59,7 +60,11 @@ export default function App() {
           </div>
         )}
         {messages.map((m, i) => (
-          <div key={i} className={`msg ${m.role}`}>{m.content}</div>
+          <div key={i} className={`msg ${m.role}`}>
+            {m.role === "assistant" ? (
+              <Markdown components={{ a: (p) => <a {...p} target="_blank" rel="noreferrer" /> }}>{m.content}</Markdown>
+            ) : m.content}
+          </div>
         ))}
         {loading && <div className="msg assistant typing">Thinking…</div>}
         <div ref={bottomRef} />

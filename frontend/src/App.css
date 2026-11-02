@@ -23,3 +23,5 @@ input { flex: 1; min-width: 0; padding: 12px; border-radius: 10px; border: 1px s
 button { padding: 10px 16px; border-radius: 10px; border: none; background: var(--accent); color: #fff; font-size: .95rem; cursor: pointer; }
 button:disabled { opacity: .5; cursor: default; }
 button.secondary { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+.msg p { margin: 0 0 .5em; } .msg p:last-child { margin: 0; } .msg ul, .msg ol { margin: .25em 0; padding-left: 1.25em; }
+.msg a { color: var(--accent); } .msg.user { white-space: pre-wrap; } .msg.assistant { white-space: normal; }

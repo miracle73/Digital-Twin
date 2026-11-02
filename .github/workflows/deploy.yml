@@ -14,8 +14,7 @@ env:
   FUNCTION_NAME: digital-twin
   ROLE_NAME: digital-twin-lambda
   MODEL: openai/gpt-4o-mini
-  # Set to your Vercel URL (e.g. https://digital-twin.vercel.app) once deployed.
-  ALLOWED_ORIGIN: "*"
+  ALLOWED_ORIGIN: https://digital-twin-flax-ten.vercel.app
 
 jobs:
   deploy:
